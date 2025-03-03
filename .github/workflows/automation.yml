@@ -27,4 +27,4 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Run Script
-      run: python ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
+      run: python labeling_tool.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
