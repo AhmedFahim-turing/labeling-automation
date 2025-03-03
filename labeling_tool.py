@@ -1,8 +1,5 @@
-# import pandas as pd
 from urllib.parse import quote
 import requests
-
-# import numpy as np
 from collections import defaultdict
 import pandas as pd
 import numpy as np
