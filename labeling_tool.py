@@ -288,7 +288,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             Num_0_or_1_Correctness_made=("Has_0_or_1_Correctness", "sum"),
         )
         .merge(
-            author_df[author_df["Reviewer_changes"] == 0]
+            author_df[author_df["Reviewer_changes"] != 1]
             .groupby("VersionUpdatedDate", as_index=False)["Author"]
             .nunique()
             .rename({"Author": "Num_Active_Authors"}, axis="columns"),
