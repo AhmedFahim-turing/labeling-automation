@@ -39,6 +39,29 @@ async def get_responses(url_list: list[str], bearer_token: str):
     )
 
 
+def author_metric_group(input_df):
+    new_samples = input_df[input_df["Rework_or_NewTask"] == "New_Task"]
+
+    return pd.Series(
+        {
+            "Num_samples": len(input_df),
+            "New_samples": len(new_samples),
+            "Num_Reviewed": new_samples["score"].count(),
+            "score": input_df["score"].mean(),
+            "avg_duration_min": input_df["durationMinutes"].mean(),
+            "Completeness": input_df["Completeness"].mean(),
+            "Language_Quality": input_df["Language Quality"].mean(),
+            "Question_Correctness": input_df["Question correctness"].mean(),
+            "Answer_Correctness": input_df["Accuracy of the Final Answer"].mean(),
+            "Image_Correctness": input_df["Image correctness"].mean(),
+            "Gemini_link_correctness": input_df["Gemini link correctness"].mean(),
+            "Answer_Format_Correctness": input_df["Answer Format Correctness"].mean(),
+            "Num_0_or_1_Correctness": new_samples["Has_0_or_1_Correctness"].sum(),
+            "Num_Reworks": new_samples["Rework_task"].sum(),
+        }
+    )
+
+
 def make_share_json(df: pd.DataFrame):
     for col in df.columns:
         if col.lower().endswith("date"):
@@ -211,6 +234,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             "Completeness",
             "Language Quality",
             "Question correctness",
+            "Accuracy of the Final Answer",
             "Image correctness",
             "Gemini link correctness",
             "Answer Format Correctness",
@@ -238,11 +262,13 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         .groupby(["Author", "VersionUpdatedDate", "Rework_or_NewTask"], as_index=False)
         .agg(
             Num_samples=("TaskID", "size"),
+            Num_Reviewed=("score", "size"),
             score=("score", "mean"),
             avg_duration_min=("durationMinutes", "mean"),
             Completeness=("Completeness", "mean"),
             Language_Quality=("Language Quality", "mean"),
             Question_Correctness=("Question correctness", "mean"),
+            Answer_correctness=("Accuracy of the Final Answer", "mean"),
             Image_Correctness=("Image correctness", "mean"),
             Gemini_link_correctness=("Gemini link correctness", "mean"),
             Answer_Format_Correctness=("Answer Format Correctness", "mean"),
@@ -253,7 +279,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     )
 
     author_summary_share["Rework_percent"] = (
-        author_summary_share["Num_Reworks"] / author_summary_share["Num_samples"]
+        author_summary_share["Num_Reworks"] / author_summary_share["Num_Reviewed"]
     )
 
     review_df_final = review_df.merge(
@@ -272,6 +298,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             Completeness=("Completeness", "mean"),
             Language_Quality=("Language Quality", "mean"),
             Question_Correctness=("Question correctness", "mean"),
+            Answer_correctness=("Accuracy of the Final Answer", "mean"),
             Image_Correctness=("Image correctness", "mean"),
             Gemini_link_correctness=("Gemini link correctness", "mean"),
             Answer_Format_Correctness=("Answer Format Correctness", "mean"),
@@ -318,24 +345,11 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             grouped_review, on=["TaskID", "ConversationVersionID"], how="left"
         )
         .groupby(["Author", "VersionUpdatedDate"], as_index=False)
-        .agg(
-            Num_samples=("TaskID", "size"),
-            score=("score", "mean"),
-            avg_duration_min=("durationMinutes", "mean"),
-            Completeness=("Completeness", "mean"),
-            Language_Quality=("Language Quality", "mean"),
-            Question_Correctness=("Question correctness", "mean"),
-            Image_Correctness=("Image correctness", "mean"),
-            Gemini_link_correctness=("Gemini link correctness", "mean"),
-            Answer_Format_Correctness=("Answer Format Correctness", "mean"),
-            Num_0_or_1_Correctness=("Has_0_or_1_Correctness", "sum"),
-            Reviewer_changes=("Reviewer_changes", "sum"),
-            Num_Reworks=("Rework_task", "sum"),
-        )
+        .apply(author_metric_group, include_groups=False)
     )
 
     author_metrics_share["Rework_percent"] = (
-        author_metrics_share["Num_Reworks"] / author_metrics_share["Num_samples"]
+        author_metrics_share["Num_Reworks"] / author_metrics_share["Num_Reviewed"]
     )
     requests.post(
         appscript_url,
