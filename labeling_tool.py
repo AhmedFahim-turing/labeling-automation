@@ -316,9 +316,11 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         )
         .merge(
             author_df[author_df["Reviewer_changes"] != 1]
-            .groupby("VersionUpdatedDate", as_index=False)["Author"]
-            .nunique()
-            .rename({"Author": "Num_Active_Authors"}, axis="columns"),
+            .groupby("VersionUpdatedDate", as_index=False)
+            .agg(
+                Num_Active_Authors=("Author", "nunique"),
+                Author_list=("Author", "unique"),
+            ),
             how="outer",
             on="VersionUpdatedDate",
         )
@@ -331,13 +333,39 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         .agg(
             Num_Moved_to_Done=("TaskID", "size"),
             Num_0_or_1_Correctness_Done=("Has_0_or_1_Correctness", "sum"),
-            Num_Active_Reviewers=("Reviewer", "nunique"),
+        )
+        .merge(
+            review_df.groupby("SubmittedDate", as_index=False).agg(
+                Num_Active_Reviewers=("Reviewer", "nunique"),
+                Reviewer_list=("Reviewer", "unique"),
+            ),
+            how="outer",
         )
         .rename({"SubmittedDate": "Date"}, axis="columns")
     )
 
     overall_stats_share = author_overall.merge(
         reviewer_overall, how="outer", on="Date", validate="one_to_one"
+    )
+    overall_stats_share["Num_Active_Headcount"] = overall_stats_share.apply(
+        lambda x: len(
+            set(
+                (
+                    list(x["Author_list"])
+                    if hasattr(x["Author_list"], "__iter__")
+                    else []
+                )
+                + (
+                    list(x["Reviewer_list"])
+                    if hasattr(x["Reviewer_list"], "__iter__")
+                    else []
+                )
+            )
+        ),
+        axis=1,
+    )
+    overall_stats_share = overall_stats_share.drop(
+        columns=["Author_list", "Reviewer_list"]
     )
 
     author_metrics_share = (
