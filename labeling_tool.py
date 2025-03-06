@@ -66,7 +66,7 @@ def make_share_json(df: pd.DataFrame):
     for col in df.columns:
         if col.lower().endswith("date"):
             df[col] = df[col].astype(str)
-    return [df.columns.tolist()] + df.fillna("").values.tolist()
+    return [df.columns.tolist()] + df.fillna("").astype(str).fillna("").values.tolist()
 
 
 quality_dim_id_mapping = {
