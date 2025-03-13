@@ -91,6 +91,7 @@ def parse_responses(responses, tabs, project_id):
             review_type = "First_Review"
             reworked = False
             num_positive_reviews = 0
+            num_reviewed_tab = 0
             for review in reviews:
                 review_dict["TaskID"].append(task["id"])
                 review_dict["ConversationVersionID"].append(
@@ -101,6 +102,7 @@ def parse_responses(responses, tabs, project_id):
                 review_dict["durationMinutes"].append(review["durationMinutes"])
                 review_dict["score"].append(review["score"])
                 review_dict["stage"].append(review_type)
+                review_dict["num_reviewed_tab"].append(num_reviewed_tab)
                 q_added = set()
                 for q_dim in review["qualityDimensionValues"]:
                     q_added.add(q_dim["qualityDimensionId"])
@@ -112,11 +114,13 @@ def parse_responses(responses, tabs, project_id):
                 if review["followupRequired"]:
                     review_dict["Reviewed"].append("No")
                     reworked = True
+                    num_reviewed_tab = 0
                 else:
                     review_dict["Reviewed"].append("Yes")
                     review_type = "Second_Review"
                     reworked = False
                     num_positive_reviews += 1
+                    num_reviewed_tab = 1
             task_dict["reworked"].append(reworked)
             task_dict["num_positive_reviews"].append(num_positive_reviews)
 
@@ -205,8 +209,18 @@ def make_reviewer_agg(input_df) -> pd.DataFrame:
 
 
 def make_second_reviewer_share(review_df):
-    second_review_df = review_df[review_df["stage"] == "Second_Review"]
-    return make_reviewer_agg(second_review_df)
+    second_df = review_df[review_df["stage"] == "Second_Review"]
+    second_review_df = make_reviewer_agg(second_df)
+    extra_info = (
+        second_df[["Reviewer", "SubmittedDate", "num_reviewed_tab"]]
+        .groupby(["Reviewer", "SubmittedDate"])["num_reviewed_tab"]
+        .sum()
+        .reset_index()
+    )
+    second_review_df = second_review_df.merge(
+        extra_info, on=["Reviewer", "SubmittedDate"], how="left", validate="one_to_one"
+    )
+    return second_review_df
 
 
 def make_reviewer_share_df(review_df: pd.DataFrame) -> pd.DataFrame:
@@ -413,6 +427,9 @@ def make_author_share_df(author_df, review_df):
     author_summary_share["Rework_percent"] = (
         author_summary_share["Num_Reworks"] / author_summary_share["Num_Reviewed"]
     )
+    author_summary_share.loc[
+        author_summary_share["Rework_or_NewTask"] == "Rework", "Num_0_or_1_Correctness"
+    ] = np.nan
     return author_summary_share
 
 
