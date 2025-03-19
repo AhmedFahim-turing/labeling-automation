@@ -146,12 +146,26 @@ def author_metric_group(input_df):
             "Answer_Format_Correctness": input_df["Answer Format Correctness"].mean(),
             "Num_0_or_1_Correctness": new_samples["Has_0_or_1_Correctness"].sum(),
             "Num_Reworks": new_samples["Rework_task"].sum(),
+            "Num_Total_Rework": new_samples["Num_rework_total"].sum(),
         }
     )
 
 
 def make_author_metrics_share_df(author_df, review_df):
     grouped_review = group_review(review_df)
+
+    rework_dict = (
+        review_df[review_df["Reviewed"] == "No"].groupby("TaskID").size().to_dict()
+    )
+
+    author_df["Num_rework_total"] = author_df.apply(
+        lambda x: (
+            rework_dict.get(x["TaskID"], 0)
+            if x["Rework_or_NewTask"] == "New_Task"
+            else np.nan
+        ),
+        axis=1,
+    )
 
     author_metrics_share = (
         author_df.merge(
@@ -163,6 +177,13 @@ def make_author_metrics_share_df(author_df, review_df):
 
     author_metrics_share["Rework_percent"] = (
         author_metrics_share["Num_Reworks"] / author_metrics_share["Num_Reviewed"]
+    )
+    columns = author_metrics_share.columns.tolist()
+    author_metrics_share = author_metrics_share[
+        columns[:-2] + [columns[-1]] + [columns[-2]]
+    ]
+    author_metrics_share["Total_Rework_percent"] = (
+        author_metrics_share["Num_Total_Rework"] / author_metrics_share["Num_Reviewed"]
     )
     return author_metrics_share
 
@@ -384,8 +405,12 @@ def group_review(review_df):
     ].mean()
 
 
-def make_author_share_df(author_df, review_df):
+def make_author_share_df(author_df: pd.DataFrame, review_df: pd.DataFrame):
     grouped_review = group_review(review_df)
+
+    rework_dict = (
+        review_df[review_df["Reviewed"] == "No"].groupby("TaskID").size().to_dict()
+    )
 
     reviewer_grouped = review_df.groupby(
         ["TaskID", "ConversationVersionID"], as_index=False
@@ -401,6 +426,16 @@ def make_author_share_df(author_df, review_df):
         ),
         axis=1,
     )
+
+    author_df["Num_rework_total"] = author_df.apply(
+        lambda x: (
+            rework_dict.get(x["TaskID"], 0)
+            if x["Rework_or_NewTask"] == "New_Task"
+            else np.nan
+        ),
+        axis=1,
+    )
+
     author_summary_share = (
         author_df.merge(
             grouped_review, on=["TaskID", "ConversationVersionID"], how="left"
@@ -421,11 +456,19 @@ def make_author_share_df(author_df, review_df):
             Num_0_or_1_Correctness=("Has_0_or_1_Correctness", "sum"),
             Reviewer_changes=("Reviewer_changes", "sum"),
             Num_Reworks=("Rework_task", "sum"),
+            Num_Total_Rework=("Num_rework_total", "sum"),
         )
     )
 
     author_summary_share["Rework_percent"] = (
         author_summary_share["Num_Reworks"] / author_summary_share["Num_Reviewed"]
+    )
+    columns = author_summary_share.columns.tolist()
+    author_summary_share = author_summary_share[
+        columns[:-2] + [columns[-1]] + [columns[-2]]
+    ]
+    author_summary_share["Total_Rework_percent"] = (
+        author_summary_share["Num_Total_Rework"] / author_summary_share["Num_Reviewed"]
     )
     author_summary_share.loc[
         author_summary_share["Rework_or_NewTask"] == "Rework", "Num_0_or_1_Correctness"
