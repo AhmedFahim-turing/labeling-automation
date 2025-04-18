@@ -41,12 +41,19 @@ def get_subject_mapping_func(project_id):
         return lambda x: x.get(
             "rc_form_response_datasetDomainAndTopic", "::Not Found"
         ).split("::")[1]
-    elif project_id == "366":
+    elif project_id in ["366", "441"]:
         return lambda x: x.get("rc_form_response_subjectAndUnit", "Not Found::").split(
             "::"
         )[0]
     else:
         raise Exception
+
+
+def make_share_json(df: pd.DataFrame):
+    for col in df.columns:
+        if col.lower().endswith("date"):
+            df[col] = df[col].astype(str)
+    return [df.columns.tolist()] + df.fillna("").astype(str).fillna("").values.tolist()
 
 
 def parse_responses(responses, tabs, project_id):
@@ -72,6 +79,16 @@ def parse_responses(responses, tabs, project_id):
             )
             task_dict["Subject"].append(subject_mapping_func(metadata_dict))
             task_dict["tab"].append(tabs[i])
+            if (
+                ("latestDeliveryBatch" in task)
+                and (task["latestDeliveryBatch"])
+                and ("deliveryBatch" in task["latestDeliveryBatch"])
+            ):
+                task_dict["deliveryBatch"].append(
+                    task["latestDeliveryBatch"]["deliveryBatch"]["name"]
+                )
+            else:
+                task_dict["deliveryBatch"].append(np.nan)
             versions = task["versions"]
             reviews = [
                 review for review in task["reviews"] if review["status"] == "published"
@@ -186,13 +203,6 @@ def make_author_metrics_share_df(author_df, review_df):
         author_metrics_share["Num_Total_Rework"] / author_metrics_share["Num_Reviewed"]
     )
     return author_metrics_share
-
-
-def make_share_json(df: pd.DataFrame):
-    for col in df.columns:
-        if col.lower().endswith("date"):
-            df[col] = df[col].astype(str)
-    return [df.columns.tolist()] + df.fillna("").astype(str).fillna("").values.tolist()
 
 
 def make_reviewer_agg(input_df) -> pd.DataFrame:
@@ -562,3 +572,12 @@ def make_overall_stats(author_df, review_df):
         columns=["Author_list", "First_Reviewer_list", "Second_Reviewer_list"]
     )
     return overall_stats_share
+
+
+def prepare_audit_report(review_df: pd.DataFrame, task_df: pd.DataFrame):
+    second_review_df = review_df[review_df["stage"] == "Second_Review"]
+    review_data = (
+        second_review_df.sort_values("SubmittedDate", ascending=True)
+        .groupby("TaskID", as_index=False)
+        .agg(lambda x: x.iloc[0])
+    )

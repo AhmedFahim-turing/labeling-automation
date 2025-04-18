@@ -37,6 +37,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     )
 
     task_df = prepare_task_df(task_dict)
+    # task_df.to_csv(f"{project_id}_task.csv", index=False)
 
     review_df = make_review_df(review_dict, task_df["TaskID"])
     author_df = make_author_df(author_dict, task_df["TaskID"])
