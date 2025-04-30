@@ -29,17 +29,6 @@ jobs:
     - name: Run Script
       run: python labeling_tool.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
 
-name: Eval application
-
-on:
-  schedule:
-    - cron: "0 6,18 * * *"
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
   build:
 
     runs-on: ubuntu-latest
