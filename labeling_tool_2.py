@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import asyncio
 import argparse
-from utils.constants import PROJECT_IDS
+from utils.constants import PROJECT_IDS_2
 from utils.utils import (
     get_tabs_urls,
     get_responses,
@@ -42,6 +42,9 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     review_df = make_review_df(review_dict, task_df["TaskID"])
     author_df = make_author_df(author_dict, task_df["TaskID"])
 
+    # author_df.to_csv(f"{project_id}_author.csv", index=False)
+    # review_df.to_csv(f"{project_id}_review.csv", index=False)
+
     author_df = author_df[author_df.columns[author_df.notnull().sum() != 0]]
     review_df = review_df[review_df.columns[review_df.notnull().sum() != 0]]
 
@@ -55,30 +58,67 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
 
     second_reviewer_summary_share = make_second_reviewer_share(review_df)
 
+    task_df = task_df.rename(
+        columns={
+            "rc_form_response_isQuestionCorrect": "Is_Question_Correct",
+            "rc_form_response_hasImageInQuestionChoices": "Image Correctness",
+        }
+    )
+
+    task_df["Image Correctness"] = task_df["Image Correctness"].replace(
+        {
+            "No": "Image not required or present correctly",
+            "Image not Required": "Image not required or present correctly",
+            "Image Required and is provided and correct": "Image not required or present correctly",
+            "Yes": "Image required but is absent or incorrect",
+            "Image Required but not provided or is Incorrect": "Image required but is absent or incorrect",
+        }
+    )
+    sub_task_df = task_df[task_df["Status"].str.contains("Done")]
+
     requests.post(
         appscript_url,
         json={
             "projectID": project_id,
             "status": "pass",
-            "Author_summary": make_share_json(author_summary_share),
+            "Author_summary": make_share_json(
+                author_summary_share.drop(columns=["Num_0_or_1_Correctness"])
+            ),
             "First_Reviewer_summary": make_share_json(reviewer_summary_share),
             "Second_Reviewer_summary": make_share_json(second_reviewer_summary_share),
-            "Overall_summary": make_share_json(overall_stats_share),
-            "author_score": make_share_json(author_metrics_share),
+            "Overall_summary": make_share_json(
+                overall_stats_share.drop(
+                    columns=[
+                        "Num_0_or_1_Correctness_made",
+                        "Num_0_or_1_Correctness_First_Done",
+                        "Num_0_or_1_Correctness_Second_Done",
+                    ]
+                )
+            ),
+            "author_score": make_share_json(
+                author_metrics_share.drop(columns=["Num_0_or_1_Correctness"])
+            ),
             "Task_Status": make_share_json(
                 pd.crosstab(task_df["Subject"], task_df["Status"]).reset_index()
+            ),
+            "Task_Status_2": make_share_json(
+                pd.crosstab(
+                    [sub_task_df["Subject"], sub_task_df["Is_Question_Correct"]],
+                    sub_task_df["Image Correctness"],
+                ).reset_index()
             ),
         },
     )
 
 
+# main()
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("bearer_token", type=str)
     parser.add_argument("appscript_url", type=str)
     args = parser.parse_args()
 
-    for project_id in PROJECT_IDS:
+    for project_id in PROJECT_IDS_2:
         main(
             project_id=project_id,
             bearer_token=args.bearer_token,

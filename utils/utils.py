@@ -45,6 +45,15 @@ def get_subject_mapping_func(project_id):
         return lambda x: x.get("rc_form_response_subjectAndUnit", "Not Found::").split(
             "::"
         )[0]
+    elif project_id == "448":
+        return lambda x: x.get("batchName", "Not Found")
+    elif project_id == "449":
+
+        def subject_func(x):
+            return_str = x.get("ID", "Not Found_")
+            return return_str[: return_str.rfind("_")]
+
+        return subject_func
     else:
         raise Exception
 
@@ -67,17 +76,28 @@ def parse_responses(responses, tabs, project_id):
 
     for i, list_tasks in enumerate(responses):
         for task in list_tasks.json():
-            if task["batchId"] in ONBOARDING_BATCH_MAP[project_id]:
+            if task["batchId"] in ONBOARDING_BATCH_MAP.get(project_id, []):
                 continue
             metadata_dict = {
                 i[2 : i.rfind("**")]: i[i.rfind("** - ") + 5 :]
                 for i in task["statement"].split("\n\n")[:-1]
             }
+            if "id" in metadata_dict:
+                metadata_dict["ID"] = metadata_dict.pop("id")
             task_dict["TaskID"].append(task["id"])
             task_dict["Num_Gemini_Correct"].append(
                 metadata_dict.get("rc_form_response_numberOfCorrectLinks", np.nan)
             )
             task_dict["Subject"].append(subject_mapping_func(metadata_dict))
+            for k, v in metadata_dict.items():
+                if k not in task_dict:
+                    task_dict[k].extend(
+                        [
+                            np.nan,
+                        ]
+                        * (len(task_dict["TaskID"]) - 1)
+                    )
+                task_dict[k].append(v)
             task_dict["tab"].append(tabs[i])
             if (
                 ("latestDeliveryBatch" in task)
@@ -100,10 +120,10 @@ def parse_responses(responses, tabs, project_id):
                 author_dict["VersionCreatedDate"].append(version["createdAt"])
                 author_dict["VersionUpdatedDate"].append(version["updatedAt"])
                 author_dict["durationMinutes"].append(version["durationMinutes"])
-                if (j == 0) and (len(versions) > 1):
-                    author_dict["Rework_task"].append(1)
-                else:
-                    author_dict["Rework_task"].append(np.nan)
+                # if (j == 0) and (len(versions) > 1):
+                #     author_dict["Rework_task"].append(1)
+                # else:
+                #     author_dict["Rework_task"].append(np.nan)
                 author_dict["VersionNumber"].append(j)
             review_type = "First_Review"
             reworked = False
@@ -140,31 +160,41 @@ def parse_responses(responses, tabs, project_id):
                     num_reviewed_tab = 1
             task_dict["reworked"].append(reworked)
             task_dict["num_positive_reviews"].append(num_positive_reviews)
+            for k, v in task_dict.items():
+                if len(v) < len(task_dict["TaskID"]):
+                    task_dict[k].append(np.nan)
 
     return task_dict, author_dict, review_dict
 
 
 def author_metric_group(input_df):
     new_samples = input_df[input_df["Rework_or_NewTask"] == "New_Task"]
+    score_cols = ["score"] + [
+        dim for dim in QUALITY_DIM_ID_MAPPING.values() if dim in input_df.columns
+    ]
+    score_dict = {i: input_df[i].mean() for i in score_cols}
 
     return pd.Series(
-        {
-            "Num_samples": len(input_df),
-            "New_samples": len(new_samples),
-            "Num_Reviewed": new_samples["score"].count(),
-            "score": input_df["score"].mean(),
-            "avg_duration_min": input_df["durationMinutes"].mean(),
-            "Completeness": input_df["Completeness"].mean(),
-            "Language_Quality": input_df["Language Quality"].mean(),
-            "Question_Correctness": input_df["Question correctness"].mean(),
-            "Answer_Correctness": input_df["Accuracy of the Final Answer"].mean(),
-            "Image_Correctness": input_df["Image correctness"].mean(),
-            "Gemini_link_correctness": input_df["Gemini link correctness"].mean(),
-            "Answer_Format_Correctness": input_df["Answer Format Correctness"].mean(),
-            "Num_0_or_1_Correctness": new_samples["Has_0_or_1_Correctness"].sum(),
-            "Num_Reworks": new_samples["Rework_task"].sum(),
-            "Num_Total_Rework": new_samples["Num_rework_total"].sum(),
-        }
+        dict(
+            {
+                "Num_samples": len(input_df),
+                "New_samples": len(new_samples),
+                "Num_Reviewed": new_samples["score"].count(),
+                # "score": input_df["score"].mean(),
+                "avg_duration_min": input_df["durationMinutes"].mean(),
+                # "Completeness": input_df["Completeness"].mean(),
+                # "Language_Quality": input_df["Language Quality"].mean(),
+                # "Question_Correctness": input_df["Question correctness"].mean(),
+                # "Answer_Correctness": input_df["Accuracy of the Final Answer"].mean(),
+                # "Image_Correctness": input_df["Image correctness"].mean(),
+                # "Gemini_link_correctness": input_df["Gemini link correctness"].mean(),
+                # "Answer_Format_Correctness": input_df["Answer Format Correctness"].mean(),
+                "Num_0_or_1_Correctness": new_samples["Has_0_or_1_Correctness"].sum(),
+                "Num_Reworks": new_samples["Rework_task"].sum(),
+                "Num_Total_Rework": new_samples["Num_rework_total"].sum(),
+            },
+            **score_dict,
+        )
     )
 
 
@@ -183,6 +213,14 @@ def make_author_metrics_share_df(author_df, review_df):
         ),
         axis=1,
     )
+    author_df["Rework_task"] = author_df.apply(
+        lambda x: (
+            1
+            if (x["TaskID"] in rework_dict) and (x["Rework_or_NewTask"] == "New_Task")
+            else np.nan
+        ),
+        axis=1,
+    )
 
     author_metrics_share = (
         author_df.merge(
@@ -195,6 +233,10 @@ def make_author_metrics_share_df(author_df, review_df):
     author_metrics_share["Rework_percent"] = (
         author_metrics_share["Num_Reworks"] / author_metrics_share["Num_Reviewed"]
     )
+    columns = author_metrics_share.columns.tolist()
+    rework_cols = [col for col in columns if "rework" in col.lower()]
+    non_rework_cols = [col for col in columns if "rework" not in col.lower()]
+    author_metrics_share = author_metrics_share[non_rework_cols + rework_cols]
     columns = author_metrics_share.columns.tolist()
     author_metrics_share = author_metrics_share[
         columns[:-2] + [columns[-1]] + [columns[-2]]
@@ -281,19 +323,12 @@ def make_reviewer_share_df(review_df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
         .rename(columns={"TaskID": "Num_Second_Rework"})
     )
+    score_cols = ["score"] + [
+        dim for dim in QUALITY_DIM_ID_MAPPING.values() if dim in review_df.columns
+    ]
+
     fifth_df = (
-        second_first_review.groupby(["Reviewer", "SubmittedDate"])[
-            [
-                "score",
-                "Completeness",
-                "Language Quality",
-                "Accuracy of the Final Answer",
-                "Question correctness",
-                "Image correctness",
-                "Gemini link correctness",
-                "Answer Format Correctness",
-            ]
-        ]
+        second_first_review.groupby(["Reviewer", "SubmittedDate"])[score_cols]
         .mean()
         .reset_index()
     )
@@ -363,10 +398,15 @@ def assign_status(row):
 def prepare_task_df(task_dict):
     task_df = pd.DataFrame(task_dict)
     task_df["Num_Gemini_Correct"] = pd.to_numeric(task_df["Num_Gemini_Correct"])
+    task_df["Status"] = task_df.apply(assign_status, axis=1)
 
-    zero_one_task_df = task_df[task_df["Num_Gemini_Correct"] < 2].reset_index(drop=True)
-    zero_one_task_df["Status"] = zero_one_task_df.apply(assign_status, axis=1)
-    return zero_one_task_df
+    if task_df["Num_Gemini_Correct"].sum() > 0:
+        zero_one_task_df = task_df[task_df["Num_Gemini_Correct"] < 2].reset_index(
+            drop=True
+        )
+        return zero_one_task_df
+    else:
+        return task_df
 
 
 def make_review_df(review_dict, tasks):
@@ -401,17 +441,11 @@ def make_author_df(author_dict, tasks):
 
 
 def group_review(review_df):
+    score_cols = ["score"] + [
+        dim for dim in QUALITY_DIM_ID_MAPPING.values() if dim in review_df.columns
+    ]
     return review_df.groupby(["TaskID", "ConversationVersionID"], as_index=False)[
-        [
-            "score",
-            "Completeness",
-            "Language Quality",
-            "Question correctness",
-            "Accuracy of the Final Answer",
-            "Image correctness",
-            "Gemini link correctness",
-            "Answer Format Correctness",
-        ]
+        score_cols
     ].mean()
 
 
@@ -445,34 +479,63 @@ def make_author_share_df(author_df: pd.DataFrame, review_df: pd.DataFrame):
         ),
         axis=1,
     )
+    author_df["Rework_task"] = author_df.apply(
+        lambda x: (
+            1
+            if (x["TaskID"] in rework_dict) and (x["Rework_or_NewTask"] == "New_Task")
+            else np.nan
+        ),
+        axis=1,
+    )
 
-    author_summary_share = (
-        author_df.merge(
-            grouped_review, on=["TaskID", "ConversationVersionID"], how="left"
-        )
-        .groupby(["Author", "VersionUpdatedDate", "Rework_or_NewTask"], as_index=False)
-        .agg(
-            Num_samples=("TaskID", "size"),
-            Num_Reviewed=("score", "count"),
-            score=("score", "mean"),
-            avg_duration_min=("durationMinutes", "mean"),
-            Completeness=("Completeness", "mean"),
-            Language_Quality=("Language Quality", "mean"),
-            Question_Correctness=("Question correctness", "mean"),
-            Answer_correctness=("Accuracy of the Final Answer", "mean"),
-            Image_Correctness=("Image correctness", "mean"),
-            Gemini_link_correctness=("Gemini link correctness", "mean"),
-            Answer_Format_Correctness=("Answer Format Correctness", "mean"),
-            Num_0_or_1_Correctness=("Has_0_or_1_Correctness", "sum"),
-            Reviewer_changes=("Reviewer_changes", "sum"),
-            Num_Reworks=("Rework_task", "sum"),
-            Num_Total_Rework=("Num_rework_total", "sum"),
-        )
+    author_summary_group = author_df.merge(
+        grouped_review, on=["TaskID", "ConversationVersionID"], how="left"
+    ).groupby(["Author", "VersionUpdatedDate", "Rework_or_NewTask"], as_index=False)
+    score_cols = ["score"] + [
+        dim for dim in QUALITY_DIM_ID_MAPPING.values() if dim in review_df.columns
+    ]
+
+    first_set_cols = author_summary_group.agg(
+        Num_samples=("TaskID", "size"),
+        Num_Reviewed=("score", "count"),
+        # score=("score", "mean"),
+        avg_duration_min=("durationMinutes", "mean"),
+        # Completeness=("Completeness", "mean"),
+        # Language_Quality=("Language Quality", "mean"),
+        # Question_Correctness=("Question correctness", "mean"),
+        # Answer_correctness=("Accuracy of the Final Answer", "mean"),
+        # Image_Correctness=("Image correctness", "mean"),
+        # Gemini_link_correctness=("Gemini link correctness", "mean"),
+        # Answer_Format_Correctness=("Answer Format Correctness", "mean"),
+        Num_0_or_1_Correctness=("Has_0_or_1_Correctness", "sum"),
+        Reviewer_changes=("Reviewer_changes", "sum"),
+        Num_Reworks=("Rework_task", "sum"),
+        Num_Total_Rework=("Num_rework_total", "sum"),
+    )
+
+    second_set_cols = author_summary_group[score_cols].mean()
+
+    author_summary_share = first_set_cols.merge(
+        second_set_cols,
+        on=["Author", "VersionUpdatedDate", "Rework_or_NewTask"],
+        how="outer",
     )
 
     author_summary_share["Rework_percent"] = (
         author_summary_share["Num_Reworks"] / author_summary_share["Num_Reviewed"]
     )
+    columns = author_summary_share.columns.tolist()
+    rework_cols = [
+        col
+        for col in columns
+        if (("rework" in col.lower()) and ("newtask" not in col.lower()))
+    ]
+    non_rework_cols = [
+        col
+        for col in columns
+        if (("rework" not in col.lower()) or ("newtask" in col.lower()))
+    ]
+    author_summary_share = author_summary_share[non_rework_cols + rework_cols]
     columns = author_summary_share.columns.tolist()
     author_summary_share = author_summary_share[
         columns[:-2] + [columns[-1]] + [columns[-2]]

@@ -1,4 +1,5 @@
 PROJECT_IDS = ["254", "366", "441"]
+PROJECT_IDS_2 = ["448", "449"]
 
 ONBOARDING_BATCH_MAP = {
     "254": set(
@@ -26,6 +27,7 @@ QUALITY_DIM_ID_MAPPING = {
     32: "Image correctness",
     33: "Gemini link correctness",
     35: "Answer Format Correctness",
+    24: "Correctness",
 }
 
 REWORK = (
