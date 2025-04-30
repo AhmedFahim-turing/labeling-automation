@@ -30,6 +30,16 @@ QUALITY_DIM_ID_MAPPING = {
     24: "Correctness",
 }
 
+UNCLAIMED = (
+    "unclaimed",
+    "https://labeling-g.turing.com/api/conversations/download-filtered-conversations/json?limit=10&page=1&filter[0]=batch.status||$ne||draft&filter[1]=$isClaimed||$eq||false&filter[2]=status||$eq||pending&filter[3]=projectId||$eq||{project_id}&filter[4]=batch.status||$ne||draft&join[0]=project||id&join[1]=batch||id,status,projectId&join[2]=versions||id,durationMinutes,createdAt,updatedAt,author&join[3]=versions.author||id,turingEmail&join[4]=reviews||id,submittedAt,followupRequired,status,score,conversationVersionId,durationMinutes&join[5]=reviews.qualityDimensionValues||id,score,qualityDimensionId&join[6]=reviews.reviewer||id,turingEmail",
+)
+
+INPROGRESS = (
+    "inprogress",
+    "https://labeling-g.turing.com/api/conversations/download-filtered-conversations/json?limit=10&page=1&filter[0]=batch.status||$ne||draft&filter[1]=$isClaimed||$eq||true&filter[2]=status||$eq||labeling&filter[3]=status||$in||labeling,validating&filter[4]=projectId||$eq||{project_id}&filter[5]=batch.status||$ne||draft&join[0]=project||id&join[1]=batch||id,status,projectId&join[2]=versions||id,durationMinutes,createdAt,updatedAt,author&join[3]=versions.author||id,turingEmail&join[4]=reviews||id,submittedAt,followupRequired,status,score,conversationVersionId,durationMinutes&join[5]=reviews.qualityDimensionValues||id,score,qualityDimensionId&join[6]=reviews.reviewer||id,turingEmail",
+)
+
 REWORK = (
     "rework",
     "https://labeling-g.turing.com/api/conversations/download-filtered-conversations/json?limit=10&page=1&filter[0]=batch.status||$ne||draft&filter[1]=status||$eq||rework&filter[2]=batch.status||$ne||draft&filter[3]=projectId||$eq||{project_id}&filter[4]=batch.status||$ne||draft&join[0]=project||id&join[1]=batch||id,status,projectId&join[2]=versions||id,durationMinutes,createdAt,updatedAt,author&join[3]=versions.author||id,turingEmail&join[4]=reviews||id,submittedAt,followupRequired,status,score,conversationVersionId,durationMinutes&join[5]=reviews.qualityDimensionValues||id,score,qualityDimensionId&join[6]=reviews.reviewer||id,turingEmail",

@@ -5,17 +5,25 @@ import requests
 import numpy as np
 import pandas as pd
 from .constants import (
+    UNCLAIMED,
+    INPROGRESS,
     REWORK,
     PENDING_REVIEW,
     REVIEWED,
     DELIVERY,
+    PROJECT_IDS_2,
     ONBOARDING_BATCH_MAP,
     QUALITY_DIM_ID_MAPPING,
 )
 
 
 def get_tabs_urls(project_id: str):
-    tabs, urls = zip(*[REWORK, PENDING_REVIEW, REVIEWED, DELIVERY])
+    if project_id in PROJECT_IDS_2:
+        tabs, urls = zip(
+            *[UNCLAIMED, INPROGRESS, REWORK, PENDING_REVIEW, REVIEWED, DELIVERY]
+        )
+    else:
+        tabs, urls = zip(*[REWORK, PENDING_REVIEW, REVIEWED, DELIVERY])
     final_urls = [x.format(project_id=project_id) for x in urls]
     return tabs, final_urls
 
@@ -366,6 +374,10 @@ def make_reviewer_share_df(review_df: pd.DataFrame) -> pd.DataFrame:
 def assign_status(row):
     if row["tab"] == "delivery":
         return "Delivered"
+    elif row["tab"] == "unclaimed":
+        return "Unclaimed"
+    elif row["tab"] == "inprogress":
+        return "Inprogress"
     elif (
         (row["tab"] == "pending_review")
         and (row["num_positive_reviews"] == 0)
