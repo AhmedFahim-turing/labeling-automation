@@ -119,7 +119,10 @@ def parse_responses(responses, tabs, project_id):
                 task_dict["deliveryBatch"].append(np.nan)
             versions = task["versions"]
             reviews = [
-                review for review in task["reviews"] if review["status"] == "published"
+                review
+                for review in task["reviews"]
+                if (review["status"] == "published")
+                and (review["reviewer"] is not None)
             ]
             for j, version in enumerate(versions):
                 author_dict["TaskID"].append(task["id"])
