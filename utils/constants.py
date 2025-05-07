@@ -28,6 +28,7 @@ QUALITY_DIM_ID_MAPPING = {
     33: "Gemini link correctness",
     35: "Answer Format Correctness",
     24: "Correctness",
+    171: "Gemini response correctness",
 }
 
 UNCLAIMED = (
