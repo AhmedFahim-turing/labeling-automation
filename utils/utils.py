@@ -53,7 +53,7 @@ def get_subject_mapping_func(project_id):
         return lambda x: x.get("rc_form_response_subjectAndUnit", "Not Found::").split(
             "::"
         )[0]
-    elif project_id == "448":
+    elif project_id in ["448", "471"]:
         return lambda x: x.get("batchName", "Not Found")
     elif project_id == "449":
 
@@ -142,6 +142,7 @@ def parse_responses(responses, tabs, project_id):
             num_reviewed_tab = 0
             for review in reviews:
                 review_dict["TaskID"].append(task["id"])
+                review_dict["ReviewID"].append(review["id"])
                 review_dict["ConversationVersionID"].append(
                     review["conversationVersionId"]
                 )
