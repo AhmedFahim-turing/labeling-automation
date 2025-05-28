@@ -674,17 +674,17 @@ def fix_discardability(review_df: pd.DataFrame):
             col for col in review_df.columns if col in QUALITY_DIM_ID_MAPPING.values()
         ]
         review_df.loc[
-            (review_df["SubmittedDate"] < "2025-05-27")
+            (review_df["SubmittedDate"] < pd.to_datetime("2025-05-27"))
             & (review_df["Question Discardability"] == 1),
             "Question Discardability",
         ] = 5
         review_df.loc[
-            (review_df["SubmittedDate"] < "2025-05-27")
+            (review_df["SubmittedDate"] < pd.to_datetime("2025-05-27"))
             & (review_df["Question Discardability"] == 5),
             "score",
         ] = (
             review_df.loc[
-                (review_df["SubmittedDate"] < "2025-05-27")
+                (review_df["SubmittedDate"] < pd.to_datetime("2025-05-27"))
                 & (review_df["Question Discardability"] == 5),
                 score_cols,
             ]
@@ -692,7 +692,7 @@ def fix_discardability(review_df: pd.DataFrame):
             .mean(axis=1)
             .fillna(
                 review_df.loc[
-                    (review_df["SubmittedDate"] < "2025-05-27")
+                    (review_df["SubmittedDate"] < pd.to_datetime("2025-05-27"))
                     & (review_df["Question Discardability"] == 5),
                     "score",
                 ]
