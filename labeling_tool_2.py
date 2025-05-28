@@ -2,6 +2,8 @@ from urllib.parse import quote
 import requests
 import pandas as pd
 import asyncio
+from cryptography.fernet import Fernet
+from io import StringIO
 import argparse
 from utils.constants import PROJECT_IDS_2
 from utils.utils import (
@@ -17,10 +19,12 @@ from utils.utils import (
     make_overall_stats,
     make_author_metrics_share_df,
     make_second_reviewer_share,
+    fix_discardability,
 )
 
 
 def main(project_id: str, bearer_token: str, appscript_url: str):
+    key, appscript_url = appscript_url.split("$$")
 
     tabs, urls = get_tabs_urls(project_id)
     all_responses = asyncio.run(get_responses(urls, bearer_token=bearer_token))
@@ -42,8 +46,34 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     review_df = make_review_df(review_dict, task_df["TaskID"])
     author_df = make_author_df(author_dict, task_df["TaskID"])
 
+    if project_id == "449":
+        f = Fernet(key.encode("utf-8"))
+        with open("449_sub_task.csv.enc", "rb") as file:
+            string_io = StringIO(f.decrypt(file.read()).decode("utf-8"))
+            sub_task_df = pd.read_csv(string_io)
+        with open("449_sub_author.csv.enc", "rb") as file:
+            string_io = StringIO(f.decrypt(file.read()).decode("utf-8"))
+            sub_author_df = pd.read_csv(
+                string_io, parse_dates=["VersionCreatedDate", "VersionUpdatedDate"]
+            )
+            sub_author_df["VersionCreatedDate"] = sub_author_df[
+                "VersionCreatedDate"
+            ].dt.date
+            sub_author_df["VersionUpdatedDate"] = sub_author_df[
+                "VersionUpdatedDate"
+            ].dt.date
+        with open("449_sub_review.csv.enc", "rb") as file:
+            string_io = StringIO(f.decrypt(file.read()).decode("utf-8"))
+            sub_review_df = pd.read_csv(string_io, parse_dates=["SubmittedDate"])
+            sub_review_df["SubmittedDate"] = sub_review_df["SubmittedDate"].dt.date
+
+        task_df = pd.concat([task_df, sub_task_df], ignore_index=True)
+        author_df = pd.concat([author_df, sub_author_df], ignore_index=True)
+        review_df = pd.concat([review_df, sub_review_df], ignore_index=True)
     # author_df.to_csv(f"{project_id}_author.csv", index=False)
     # review_df.to_csv(f"{project_id}_review.csv", index=False)
+
+    review_df = fix_discardability(review_df)
 
     author_df = author_df[author_df.columns[author_df.notnull().sum() != 0]]
     review_df = review_df[review_df.columns[review_df.notnull().sum() != 0]]

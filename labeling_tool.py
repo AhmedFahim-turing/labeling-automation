@@ -17,10 +17,12 @@ from utils.utils import (
     make_overall_stats,
     make_author_metrics_share_df,
     make_second_reviewer_share,
+    fix_discardability,
 )
 
 
 def main(project_id: str, bearer_token: str, appscript_url: str):
+    key, appscript_url = appscript_url.split("$$")
 
     tabs, urls = get_tabs_urls(project_id)
     all_responses = asyncio.run(get_responses(urls, bearer_token=bearer_token))
@@ -41,6 +43,8 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
 
     review_df = make_review_df(review_dict, task_df["TaskID"])
     author_df = make_author_df(author_dict, task_df["TaskID"])
+
+    review_df = fix_discardability(review_df)
 
     author_df = author_df[author_df.columns[author_df.notnull().sum() != 0]]
     review_df = review_df[review_df.columns[review_df.notnull().sum() != 0]]

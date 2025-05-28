@@ -53,15 +53,19 @@ def get_subject_mapping_func(project_id):
         return lambda x: x.get("rc_form_response_subjectAndUnit", "Not Found::").split(
             "::"
         )[0]
-    elif project_id in ["448", "471"]:
-        return lambda x: x.get("batchName", "Not Found")
-    elif project_id == "449":
+    elif project_id in ["448", "449", "471"]:
+        return lambda x: (
+            x.get("batchName", "Not Found")
+            if x.get("batchName") != "First_Batch"
+            else "Masterhub_Chemistry_Batch"
+        )
+    # elif project_id == "449":
 
-        def subject_func(x):
-            return_str = x.get("ID", "Not Found_")
-            return return_str[: return_str.rfind("_")]
+    #     def subject_func(x):
+    #         return_str = x.get("ID", "Not Found_")
+    #         return return_str[: return_str.rfind("_")]
 
-        return subject_func
+    #     return subject_func
     else:
         raise Exception
 
@@ -414,6 +418,7 @@ def assign_status(row):
 def prepare_task_df(task_dict):
     task_df = pd.DataFrame(task_dict)
     task_df["Num_Gemini_Correct"] = pd.to_numeric(task_df["Num_Gemini_Correct"])
+    task_df["batchId"] = pd.to_numeric(task_df["batchId"])
     task_df["Status"] = task_df.apply(assign_status, axis=1)
 
     if task_df["Num_Gemini_Correct"].sum() > 0:
@@ -660,3 +665,37 @@ def prepare_audit_report(review_df: pd.DataFrame, task_df: pd.DataFrame):
         .groupby("TaskID", as_index=False)
         .agg(lambda x: x.iloc[0])
     )
+
+
+def fix_discardability(review_df: pd.DataFrame):
+    review_df = review_df.copy(deep=True)
+    if "Question Discardability" in review_df.columns:
+        score_cols = [
+            col for col in review_df.columns if col in QUALITY_DIM_ID_MAPPING.values()
+        ]
+        review_df.loc[
+            (review_df["SubmittedDate"] < "2025-05-27")
+            & (review_df["Question Discardability"] == 1),
+            "Question Discardability",
+        ] = 5
+        review_df.loc[
+            (review_df["SubmittedDate"] < "2025-05-27")
+            & (review_df["Question Discardability"] == 5),
+            "score",
+        ] = (
+            review_df.loc[
+                (review_df["SubmittedDate"] < "2025-05-27")
+                & (review_df["Question Discardability"] == 5),
+                score_cols,
+            ]
+            .replace({0: np.nan})
+            .mean(axis=1)
+            .fillna(
+                review_df.loc[
+                    (review_df["SubmittedDate"] < "2025-05-27")
+                    & (review_df["Question Discardability"] == 5),
+                    "score",
+                ]
+            )
+        )
+    return review_df
