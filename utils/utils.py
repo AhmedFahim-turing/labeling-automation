@@ -53,7 +53,7 @@ def get_subject_mapping_func(project_id):
         return lambda x: x.get("rc_form_response_subjectAndUnit", "Not Found::").split(
             "::"
         )[0]
-    elif project_id in ["448", "449", "471"]:
+    elif project_id in ["448", "449", "471", "472"]:
         return lambda x: (
             x.get("batchName", "Not Found")
             if x.get("batchName") != "First_Batch"
