@@ -24,7 +24,7 @@ from utils.utils import (
 
 
 def main(project_id: str, bearer_token: str, appscript_url: str):
-    key, appscript_url = appscript_url.split("$$")
+    key, appscript_url = appscript_url.split("@@")
 
     tabs, urls = get_tabs_urls(project_id)
     all_responses = asyncio.run(get_responses(urls, bearer_token=bearer_token))
