@@ -1,6 +1,6 @@
 from urllib.parse import quote
 import requests
-from datetime import datetime, UTC
+from datetime import datetime
 import pandas as pd
 import asyncio
 
@@ -15,6 +15,15 @@ from utils.utils import (
     make_author_df,
     make_review_df,
 )
+
+
+def map_pending_review(series: pd.Series):
+    if series["tab"] == "pending_review":
+        if series["HasReviewer"]:
+            return "pending_review_with_reviewer"
+        else:
+            return "pending_review_without_reviewer"
+    return series["tab"]
 
 
 def main(project_id: str, bearer_token: str, appscript_url: str):
@@ -41,8 +50,15 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     # author_df.to_csv(f"{project_id}_author.csv", index=False)
     # review_df.to_csv(f"{project_id}_review.csv", index=False)
 
+    author_df["VersionUpdatedDate"] = author_df["VersionUpdatedDate"].dt.tz_convert(
+        None
+    )
+    review_df["SubmittedDate"] = review_df["SubmittedDate"].dt.tz_convert(None)
+
     author_want = task_df[task_df["tab"] == "rework"].merge(
-        author_df[["TaskID", "Author", "VersionUpdatedDate"]].drop_duplicates(),
+        author_df.sort_values("VersionUpdatedDate")
+        .groupby("TaskID", as_index=False)[["Author", "VersionUpdatedDate"]]
+        .last()[["TaskID", "Author", "VersionUpdatedDate"]],
         on="TaskID",
     )
     author_want["TaskLink"] = author_want["TaskID"].apply(
@@ -71,6 +87,8 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     sub_df = task_df[
         task_df["tab"].isin(["rework", "pending_review", "unclaimed", "inprogress"])
     ].sort_values("batchId")
+    sub_df["HasReviewer"] = sub_df["TaskID"].isin(review_df["TaskID"].unique())
+    sub_df["tab"] = sub_df.apply(map_pending_review, axis=1)
 
     incomplete_batches = sub_df["batchName"].unique()
     complete_batches = task_df[~task_df["batchName"].isin(incomplete_batches)][
@@ -79,16 +97,16 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
 
     author_want["ReviewedDate"] = author_want["TaskID"].map(review_submitted_dict)
     author_want["DurationPending"] = (
-        (datetime.now(UTC) - author_want["ReviewedDate"])
+        (datetime.now() - author_want["ReviewedDate"])
         .dt.total_seconds()
-        .apply(lambda x: f"{int(x//3600)}:{int((x//60)%60)}:{x%60}")
+        .apply(lambda x: f"{int(x//3600)}:{int((x//60)%60)}:{int(x%60)}")
     )
 
     review_want["AuthorCompletedDate"] = review_want["TaskID"].map(version_updated_dict)
     review_want["DurationPending"] = (
-        (datetime.now(UTC) - review_want["AuthorCompletedDate"])
+        (datetime.now() - review_want["AuthorCompletedDate"])
         .dt.total_seconds()
-        .apply(lambda x: f"{int(x//3600)}:{int((x//60)%60)}:{x%60}")
+        .apply(lambda x: f"{int(x//3600)}:{int((x//60)%60)}:{int(x%60)}")
     )
 
     requests.post(
