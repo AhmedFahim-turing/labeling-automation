@@ -430,10 +430,11 @@ def prepare_task_df(task_dict):
         return task_df
 
 
-def make_review_df(review_dict, tasks):
+def make_review_df(review_dict, tasks, convert_to_date=True):
     review_df = pd.DataFrame(review_dict)
     review_df["SubmittedDate"] = pd.to_datetime(review_df["SubmittedDate"])
-    review_df["SubmittedDate"] = review_df["SubmittedDate"].dt.date
+    if convert_to_date:
+        review_df["SubmittedDate"] = review_df["SubmittedDate"].dt.date
 
     review_df["Has_0_or_1_Correctness"] = review_df["TaskID"].apply(
         lambda x: int(x in set(tasks))
@@ -441,14 +442,15 @@ def make_review_df(review_dict, tasks):
     return review_df
 
 
-def make_author_df(author_dict, tasks):
+def make_author_df(author_dict, tasks, convert_to_date=True):
 
     author_df = pd.DataFrame(author_dict)
     author_df["VersionCreatedDate"] = pd.to_datetime(author_df["VersionCreatedDate"])
     author_df["VersionUpdatedDate"] = pd.to_datetime(author_df["VersionUpdatedDate"])
 
-    author_df["VersionCreatedDate"] = author_df["VersionCreatedDate"].dt.date
-    author_df["VersionUpdatedDate"] = author_df["VersionUpdatedDate"].dt.date
+    if convert_to_date:
+        author_df["VersionCreatedDate"] = author_df["VersionCreatedDate"].dt.date
+        author_df["VersionUpdatedDate"] = author_df["VersionUpdatedDate"].dt.date
 
     author_df["Has_0_or_1_Correctness"] = author_df.apply(
         lambda x: int(x["TaskID"] in set(tasks)) if x["VersionNumber"] == 0 else np.nan,
