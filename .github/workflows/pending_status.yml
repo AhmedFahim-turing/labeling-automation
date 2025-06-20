@@ -5,7 +5,7 @@ name: Pending Statuses
 
 on:
   schedule:
-    - cron: "0 0-23/2 * * *"
+    - cron: "0 0-23/1 * * *"
   workflow_dispatch:
 
 permissions:
