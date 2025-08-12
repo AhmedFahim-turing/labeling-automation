@@ -135,7 +135,11 @@ def parse_responses(responses, tabs, project_id):
             for j, version in enumerate(versions):
                 author_dict["TaskID"].append(task["id"])
                 author_dict["ConversationVersionID"].append(version["id"])
-                author_dict["Author"].append(version["author"]["turingEmail"])
+                try:
+                    author = version["author"]["turingEmail"]
+                except:
+                    author = np.nan
+                author_dict["Author"].append(author)
                 author_dict["VersionCreatedDate"].append(version["createdAt"])
                 author_dict["VersionUpdatedDate"].append(version["updatedAt"])
                 author_dict["durationMinutes"].append(version["durationMinutes"])
