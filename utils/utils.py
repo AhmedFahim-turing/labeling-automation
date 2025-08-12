@@ -12,13 +12,14 @@ from .constants import (
     REVIEWED,
     DELIVERY,
     PROJECT_IDS_2,
+    PROJECT_IDS_4,
     ONBOARDING_BATCH_MAP,
     QUALITY_DIM_ID_MAPPING,
 )
 
 
 def get_tabs_urls(project_id: str):
-    if project_id in PROJECT_IDS_2:
+    if project_id in PROJECT_IDS_2 + PROJECT_IDS_4:
         tabs, urls = zip(
             *[UNCLAIMED, INPROGRESS, REWORK, PENDING_REVIEW, REVIEWED, DELIVERY]
         )
@@ -59,6 +60,8 @@ def get_subject_mapping_func(project_id):
             if x.get("batchName") != "First_Batch"
             else "Masterhub_Chemistry_Batch"
         )
+    elif project_id == "547":
+        return lambda x: x.get("subject", "Not Found")
     # elif project_id == "449":
 
     #     def subject_func(x):
@@ -101,6 +104,7 @@ def parse_responses(responses, tabs, project_id):
                 metadata_dict.get("rc_form_response_numberOfCorrectLinks", np.nan)
             )
             task_dict["Subject"].append(subject_mapping_func(metadata_dict))
+            task_dict["task_status"].append(task["status"])
             for k, v in metadata_dict.items():
                 if k not in task_dict:
                     task_dict[k].extend(
@@ -135,6 +139,13 @@ def parse_responses(responses, tabs, project_id):
                 author_dict["VersionCreatedDate"].append(version["createdAt"])
                 author_dict["VersionUpdatedDate"].append(version["updatedAt"])
                 author_dict["durationMinutes"].append(version["durationMinutes"])
+                author_dict["form_stage"].append(
+                    "stage1 - Question Design"
+                    if version.get("formStage") is None
+                    else version["formStage"]
+                )
+                if author_dict["form_stage"][-1] is None:
+                    print(version)
                 # if (j == 0) and (len(versions) > 1):
                 #     author_dict["Rework_task"].append(1)
                 # else:
@@ -176,6 +187,12 @@ def parse_responses(responses, tabs, project_id):
                     num_reviewed_tab = 1
             task_dict["reworked"].append(reworked)
             task_dict["num_positive_reviews"].append(num_positive_reviews)
+            form_stage = None
+            for status in task["statusHistory"]:
+                form_stage = (
+                    status["formStage"] if status.get("formStage") else form_stage
+                )
+            task_dict["formStage"].append(form_stage)
             for k, v in task_dict.items():
                 if len(v) < len(task_dict["TaskID"]):
                     task_dict[k].append(np.nan)

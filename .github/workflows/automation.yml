@@ -28,5 +28,5 @@ jobs:
         pip install -r requirements.txt
     - name: Run Script
       run: |
-        python labeling_tool.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
-        python labeling_tool_2.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
+        python labeling_tool_3.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL}}
+        python pending_status_v2.py ${{secrets.BEARER_TOKEN}} ${{secrets.APPSCRIPT_URL_2}}
