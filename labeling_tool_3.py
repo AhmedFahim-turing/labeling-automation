@@ -104,15 +104,17 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     completed_agg["Average time per task"] = (
         completed_agg["Total time on tasks"] / completed_agg["Num Tasks completed"]
     )
-
+    author_df["VersionCreatedDate_dedup"] = (
+        author_df["VersionCreatedDate"].astype(str) + "_" + author_df.index.astype(str)
+    )
     completed_task_date = completed_task[["TaskID"]].merge(
-        author_df.groupby("TaskID")["VersionCreatedDate"].max().reset_index(),
+        author_df.groupby("TaskID")["VersionCreatedDate_dedup"].max().reset_index(),
         on="TaskID",
     )
     completed_task_date["Completed"] = 1
     author_df = author_df.merge(
-        completed_task_date, on=["TaskID", "VersionCreatedDate"], how="left"
-    )
+        completed_task_date, on=["TaskID", "VersionCreatedDate_dedup"], how="left"
+    ).drop(columns=["VersionCreatedDate_dedup"])
     author_df["Completed"] = author_df["Completed"].fillna(0).astype(int)
     date_agg = (
         author_df.groupby("VersionCreatedDate")
