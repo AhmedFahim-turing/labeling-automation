@@ -85,6 +85,16 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         validate="one_to_one",
     ).reset_index()
 
+    inprogress_task = task_df[
+        (
+            (task_df["task_status"] == "completed")
+            & (task_df["formStage"] == "stage1 - Question Design")
+        )
+        | (
+            (task_df["task_status"] != "completed")
+            & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
+        )
+    ]
     completed_task = task_df[
         (task_df["task_status"] == "completed")
         & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
@@ -100,6 +110,21 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             }
         )
         .reset_index()
+        .merge(
+            task_df["Subject"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"count": "Num Total Tasks"})
+        )
+        .merge(
+            inprogress_task["Subject"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"count": "Num Tasks In Progress"})
+        )
+    )
+    completed_agg["Num Tasks To Do"] = completed_agg["Num Total Tasks"] - (
+        completed_agg["Num Tasks completed"] + completed_agg["Num Tasks In Progress"]
     )
     completed_agg["Average time per task"] = (
         completed_agg["Total time on tasks"] / completed_agg["Num Tasks completed"]
