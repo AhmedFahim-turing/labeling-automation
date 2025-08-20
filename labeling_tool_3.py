@@ -125,6 +125,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             on="Subject",
             how="outer",
         )
+        .fillna({"Num Tasks In Progress": 0})
     )
     completed_agg["Num Tasks To Do"] = completed_agg["Num Total Tasks"] - (
         completed_agg["Num Tasks completed"] + completed_agg["Num Tasks In Progress"]
