@@ -114,13 +114,16 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             task_df["Subject"]
             .value_counts()
             .reset_index()
-            .rename(columns={"count": "Num Total Tasks"})
+            .rename(columns={"count": "Num Total Tasks"}),
+            on="Subject",
         )
         .merge(
             inprogress_task["Subject"]
             .value_counts()
             .reset_index()
-            .rename(columns={"count": "Num Tasks In Progress"})
+            .rename(columns={"count": "Num Tasks In Progress"}),
+            on="Subject",
+            how="outer",
         )
     )
     completed_agg["Num Tasks To Do"] = completed_agg["Num Total Tasks"] - (
