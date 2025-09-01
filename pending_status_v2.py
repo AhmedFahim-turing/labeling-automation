@@ -56,7 +56,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     # )
     author_grouped = author_df.groupby("TaskID", as_index=False).apply(
         lambda x: x.sort_values("VersionUpdatedDate").iloc[-1], include_groups=False
-    )[["TaskID", "Author"]]
+    )[["TaskID"]]
 
     task_merged = task_df.merge(author_grouped, on="TaskID", how="left")
     task_merged["Task URL"] = task_merged["TaskID"].apply(
