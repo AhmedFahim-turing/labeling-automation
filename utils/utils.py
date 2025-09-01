@@ -61,7 +61,11 @@ def get_subject_mapping_func(project_id):
             else "Masterhub_Chemistry_Batch"
         )
     elif project_id == "547":
-        return lambda x: x.get("subject", "Not Found")
+        return lambda x: (
+            x.get("subject", "Not Found")
+            if x.get("subject", "Not Found") != "chmistry"
+            else "chemistry"
+        )
     # elif project_id == "449":
 
     #     def subject_func(x):
@@ -105,6 +109,11 @@ def parse_responses(responses, tabs, project_id):
             )
             task_dict["Subject"].append(subject_mapping_func(metadata_dict))
             task_dict["task_status"].append(task["status"])
+            task_dict["Author"].append(
+                task.get("currentUser").get("turingEmail")
+                if task.get("currentUser")
+                else None
+            )
             for k, v in metadata_dict.items():
                 if k not in task_dict:
                     task_dict[k].extend(
@@ -401,9 +410,7 @@ def make_reviewer_share_df(review_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def assign_status(row):
-    if row["tab"] == "delivery":
-        return "Delivered"
-    elif row["tab"] == "unclaimed":
+    if row["tab"] == "unclaimed":
         return "Unclaimed"
     elif row["tab"] == "inprogress":
         return "Inprogress"
@@ -421,7 +428,7 @@ def assign_status(row):
         and (row["reworked"])
     ):
         return "1st Review Comments Addressed"
-    elif (row["tab"] == "reviewed") and (row["num_positive_reviews"] < 2):
+    elif (row["tab"] in ["reviewed", "delivery"]) and (row["num_positive_reviews"] < 2):
         return "1st Review Done"
     elif (row["tab"] == "rework") and (row["num_positive_reviews"] > 0):
         return "2nd Review Comments Added"
@@ -431,8 +438,10 @@ def assign_status(row):
         and (row["reworked"])
     ):
         return "2nd Review Comments Addressed"
-    elif (row["tab"] == "reviewed") and (row["num_positive_reviews"] > 1):
+    elif (row["tab"] in ["reviewed", "delivery"]) and (row["num_positive_reviews"] > 1):
         return "2nd Review Done"
+    elif row["tab"] == "delivery":
+        return "Delivered"
     return "Invalid Status"
 
 

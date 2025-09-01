@@ -14,6 +14,7 @@ from utils.utils import (
     prepare_task_df,
     make_author_df,
     make_review_df,
+    make_reviewer_agg,
 )
 
 
@@ -45,9 +46,15 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
     task_df["formStage"] = task_df["formStage"].str.strip()
     # task_df.to_csv(f"{project_id}_task.csv", index=False)
 
-    # review_df = make_review_df(review_dict, task_df["TaskID"], convert_to_date=False)
+    review_df = make_review_df(review_dict, task_df["TaskID"], convert_to_date=True)
     author_df = make_author_df(author_dict, task_df["TaskID"], convert_to_date=True)
 
+    author_df["form_stage"] = author_df.apply(
+        lambda x: (
+            x["form_stage"] if x["VersionNumber"] > 0 else "stage1 - Question Design"
+        ),
+        axis=1,
+    )
     # author_df.to_csv(f"{project_id}_author.csv", index=False)
     # review_df.to_csv(f"{project_id}_review.csv", index=False)
 
@@ -84,6 +91,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         rsuffix="_avg_duration",
         validate="one_to_one",
     ).reset_index()
+    review_agg = make_reviewer_agg(review_df)
 
     inprogress_task = task_df[
         (
@@ -95,27 +103,75 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
         )
     ]
+    review_task_time_dict = (
+        review_df.groupby("TaskID")["durationMinutes"].sum().to_dict()
+    )
+    # print(task_df[task_df["Subject"] == "biology"]["Status"].value_counts())
+    # print(author_df.columns)
+    reviewed_task = task_df[task_df["Status"].str.contains("Review Done")].reset_index(
+        drop=True
+    )
+    reviewed_task["review_duration"] = reviewed_task["TaskID"].map(
+        review_task_time_dict
+    )
+    # reviewed_task = reviewed_task.merge(
+    #     task_df[["TaskID", "Subject"]], on="TaskID", validate="many_to_one"
+    # )
+    # print(reviewed_task.columns)
     completed_task = task_df[
         (task_df["task_status"] == "completed")
         & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
     ]
     completed_agg = (
-        completed_task.merge(author_df[["TaskID", "durationMinutes"]], on="TaskID")
+        reviewed_task.merge(
+            author_df[
+                [
+                    "TaskID",
+                    "durationMinutes",
+                    #    "ConversationVersionID"
+                ]
+            ],
+            on="TaskID",
+        )
         .groupby("Subject")
-        .agg({"TaskID": "nunique", "durationMinutes": "sum"})
+        .agg(
+            {
+                "TaskID": "nunique",
+                "durationMinutes": "sum",
+                # "ConversationVersionID": "nunique",
+            }
+        )
         .rename(
             columns={
-                "TaskID": "Num Tasks completed",
-                "durationMinutes": "Total time on tasks",
+                "TaskID": "Num Tasks Reviewed",
+                "durationMinutes": "Author time on tasks",
+                # "review_duration": "Reviewer time on tasks",
             }
         )
         .reset_index()
+        .merge(
+            reviewed_task.groupby("Subject")[["review_duration"]]
+            .sum()
+            .reset_index()
+            .rename(columns={"review_duration": "Reviewer time on tasks"}),
+            on="Subject",
+            how="outer",
+        )
+        .merge(
+            completed_task["Subject"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"count": "Num Tasks Completed by Author"}),
+            on="Subject",
+            how="outer",
+        )
         .merge(
             task_df["Subject"]
             .value_counts()
             .reset_index()
             .rename(columns={"count": "Num Total Tasks"}),
             on="Subject",
+            how="outer",
         )
         .merge(
             inprogress_task["Subject"]
@@ -128,10 +184,18 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         .fillna({"Num Tasks In Progress": 0})
     )
     completed_agg["Num Tasks To Do"] = completed_agg["Num Total Tasks"] - (
-        completed_agg["Num Tasks completed"] + completed_agg["Num Tasks In Progress"]
+        completed_agg["Num Tasks Completed by Author"]
+        + completed_agg["Num Tasks In Progress"]
+    )
+    completed_agg["Num Tasks Ready For Review"] = (
+        completed_agg["Num Tasks Completed by Author"]
+        - completed_agg["Num Tasks Reviewed"]
+    )
+    completed_agg["Total time on tasks"] = (
+        completed_agg["Author time on tasks"] + completed_agg["Reviewer time on tasks"]
     )
     completed_agg["Average time per task"] = (
-        completed_agg["Total time on tasks"] / completed_agg["Num Tasks completed"]
+        completed_agg["Total time on tasks"] / completed_agg["Num Tasks Reviewed"]
     )
     author_df["VersionCreatedDate_dedup"] = (
         author_df["VersionCreatedDate"].astype(str) + "_" + author_df.index.astype(str)
@@ -145,12 +209,54 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
         completed_task_date, on=["TaskID", "VersionCreatedDate_dedup"], how="left"
     ).drop(columns=["VersionCreatedDate_dedup"])
     author_df["Completed"] = author_df["Completed"].fillna(0).astype(int)
+
+    review_df["SubmittedDate_dedup"] = (
+        review_df["SubmittedDate"].astype(str) + "_" + review_df.index.astype(str)
+    )
+    reviewed_task_date = reviewed_task[["TaskID"]].merge(
+        review_df.groupby("TaskID")["SubmittedDate_dedup"].max().reset_index(),
+        on="TaskID",
+    )
+    reviewed_task_date["Final_Reviewed"] = 1
+    review_df = review_df.merge(
+        reviewed_task_date, on=["TaskID", "SubmittedDate_dedup"], how="left"
+    ).drop(columns=["SubmittedDate_dedup"])
+    review_df["Final_Reviewed"] = review_df["Final_Reviewed"].fillna(0).astype(int)
+    # review_df["SubmittedDate"] = review_df["SubmittedDate"].astype(str)
+    # review_df["SubmittedDate_date"] = review_df['SubmittedDate']
+    # print(author_df["VersionCreatedDate"].dtype, review_df["SubmittedDate"].dtype)
+
     date_agg = (
         author_df.groupby("VersionCreatedDate")
         .agg({"Completed": "sum", "Author": "nunique"})
         .reset_index()
-        .rename(columns={"Completed": "Num completed", "Author": "Num Authors"})
+        .rename(
+            columns={
+                "Completed": "Num completed by author",
+                "Author": "Num Authors",
+                "VersionCreatedDate": "Date",
+            }
+        )
+        .merge(
+            review_df.groupby("SubmittedDate")
+            .agg({"Final_Reviewed": "sum", "Reviewer": "nunique"})
+            .reset_index()
+            .rename(
+                columns={
+                    "Final_Reviewed": "Num Reviewed",
+                    "Reviewer": "Num Reviewers",
+                    "SubmittedDate": "Date",
+                }
+            ),
+            on="Date",
+            how="outer",
+            validate="one_to_one",
+        )
     )
+    # df_author_final.to_csv("df_author_final.csv", index=False)
+    # review_agg.to_csv("review_agg.csv", index=False)
+    # date_agg.to_csv("date_agg.csv", index=False)
+    # completed_agg.to_csv("completed_agg.csv", index=False)
 
     requests.post(
         appscript_url,
@@ -158,6 +264,7 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             "projectID": project_id,
             "status": "pass",
             "AuthorSummary": make_share_json(df_author_final),
+            "ReviewerSummary": make_share_json(review_agg),
             "DailySummary": make_share_json(date_agg),
             "SubjectSummary": make_share_json(completed_agg),
         },
