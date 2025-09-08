@@ -98,11 +98,14 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             (task_df["task_status"] == "completed")
             & (task_df["formStage"] == "stage1 - Question Design")
         )
-        | (
-            (task_df["task_status"] != "completed")
-            & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
-        )
+        # | (
+        #     (task_df["task_status"] != "completed")
+        #     & (task_df["formStage"] == "stage2 - Evaluating Model Pass@4")
+        # )
+        | (task_df["tab"] == "inprogress")
     ]
+    rework_task = task_df[task_df["task_status"] == "rework"]
+    delivery_task = task_df[task_df["tab"] == "delivery"]
     review_task_time_dict = (
         review_df.groupby("TaskID")["durationMinutes"].sum().to_dict()
     )
@@ -181,11 +184,34 @@ def main(project_id: str, bearer_token: str, appscript_url: str):
             on="Subject",
             how="outer",
         )
-        .fillna({"Num Tasks In Progress": 0})
+        .merge(
+            rework_task["Subject"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"count": "Num Tasks In Rework"}),
+            on="Subject",
+            how="outer",
+        )
+        .merge(
+            delivery_task["Subject"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"count": "Num Tasks Delivered"}),
+            on="Subject",
+            how="outer",
+        )
+        .fillna(
+            {
+                "Num Tasks In Progress": 0,
+                "Num Tasks In Rework": 0,
+                "Num Tasks Delivered": 0,
+            }
+        )
     )
     completed_agg["Num Tasks To Do"] = completed_agg["Num Total Tasks"] - (
         completed_agg["Num Tasks Completed by Author"]
         + completed_agg["Num Tasks In Progress"]
+        + completed_agg["Num Tasks In Rework"]
     )
     completed_agg["Num Tasks Ready For Review"] = (
         completed_agg["Num Tasks Completed by Author"]
